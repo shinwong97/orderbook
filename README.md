@@ -15,6 +15,12 @@ Ensure you have the following installed:
    cd your-repo
    ```
 
+   2. Initialize the Go module:
+   ```sh
+   go mod init your-repo
+   go mod tidy
+   ```
+
 ## Running the Program
 
 1. Build and run the program:
