@@ -2,60 +2,67 @@ package services
 
 import (
 	"log"
+	"net/http"
 	"sync"
 
-	"github.com/shinwong97/models"
-
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
-// OrderBookChannel to send processed data
-var OrderBookChannel = make(chan models.ProcessedOrderBook, 10)
-
-// WebSocketClient manages multiple WebSocket connections
-type WebSocketClient struct {
-	Connections map[string]*websocket.Conn
-	mu          sync.Mutex
-}
-
-// NewWebSocketClient initializes the WebSocketClient
-func NewWebSocketClient() *WebSocketClient {
-	return &WebSocketClient{
-		Connections: make(map[string]*websocket.Conn),
+var (
+	clients   = make(map[*websocket.Conn]bool) // Connected WebSocket clients
+	broadcast = make(chan ProcessedOrderBook)  // Broadcast channel
+	wsMutex   sync.Mutex                        // Mutex for thread safety
+	upgrader  = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
 	}
-}
+)
 
-// ConnectWebSocket connects to a given WebSocket URL dynamically
-func ConnectWebSocket(exchange, wsURL string) {
-
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+// WebSocketHandler upgrades HTTP connection to WebSocket
+func WebSocketHandler(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Fatalf("Failed to connect to %s WebSocket: %v", exchange, err)
+		log.Println("Failed to upgrade connection:", err)
+		return
 	}
 	defer conn.Close()
 
-	log.Printf("Connected to %s WebSocket\n", exchange)
+	// Register client
+	wsMutex.Lock()
+	clients[conn] = true
+	wsMutex.Unlock()
+
+	log.Println("🔗 New WebSocket client connected")
 
 	for {
-		// Read messages from WebSocket
-		_, message, err := conn.ReadMessage()
+		_, _, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("Error reading from %s WebSocket: %v", exchange, err)
+			log.Println("Client disconnected:", err)
+			wsMutex.Lock()
+			delete(clients, conn)
+			wsMutex.Unlock()
 			break
 		}
-
-		// Log raw WebSocket data
-		log.Printf("[%s] Received: %s\n", exchange, string(message))
-		
 	}
 }
 
-
-// CloseAll closes all WebSocket connections
-func (w *WebSocketClient) CloseAll() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	for _, conn := range w.Connections {
-		conn.Close()
-	}
+// StartWebSocketServer starts the WebSocket server
+func StartWebSocketServer() {
+	go func() {
+		for {
+			data := <-OrderBookChannel // Get processed data
+			wsMutex.Lock()
+			for client := range clients {
+				err := client.WriteJSON(data)
+				if err != nil {
+					log.Println("Error sending data:", err)
+					client.Close()
+					delete(clients, client)
+				}
+			}
+			wsMutex.Unlock()
+		}
+	}()
 }
