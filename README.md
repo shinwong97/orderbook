@@ -21,19 +21,66 @@ Ensure you have the following installed:
    go mod tidy
    ```
 
-## Running the Program
+## Running the WebSocket Server
 
-1. Build and run the program:
-   ```sh
-   go run main.go
-   ```
+### **1. Start the Server**
 
-   If the project has multiple files:
-   ```sh
-   go run .
-   ```
+Run the WebSocket server locally:
 
-2. The output will display the average price and order book details in the console.
+```sh
+go run main.go
+```
+
+You should see:
+
+```
+🚀 Server started on port 8080
+```
+
+---
+
+## Testing the WebSocket API
+
+### **Using `wscat` (WebSocket Client)**
+
+#### **1. Install `wscat` (Optional)**
+
+If you don’t have `wscat` installed, install it using npm:
+
+```sh
+npm install -g wscat
+```
+
+#### **2. Connect to the WebSocket**
+
+If your server is running **locally**, use:
+
+```sh
+wscat -c ws://localhost:8080/ws
+```
+
+If your server is **running on a remote server**, use:
+
+```sh
+wscat -c ws://your-server-ip:8080/ws
+```
+
+Replace `your-server-ip` with your actual server IP or domain.
+
+#### **3. Expected Output**
+
+Once connected, you should receive real-time order book updates like:
+
+```json
+{
+  "exchange": "binance",
+  "average_price": 43250.12,
+  "total_orders": 40,
+  "total_size": 105.4
+}
+```
+
+
 
 ## Project Structure
 
